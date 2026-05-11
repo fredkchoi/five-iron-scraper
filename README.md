@@ -30,6 +30,11 @@ cp .env.example .env
 | `LOCATION_ID` | Your Five Iron location ID (see below) |
 | `PARTY_SIZE` | Number of people (default: 2) |
 | `FIVE_IRON_EMAIL` | Your Five Iron account email |
+| `GOOGLE_CLIENT_ID` | (Optional) Google OAuth2 client ID — for calendar events |
+| `GOOGLE_CLIENT_SECRET` | (Optional) Google OAuth2 client secret |
+| `GOOGLE_REFRESH_TOKEN` | (Optional) Obtained once via `python setup_gcal.py` |
+| `GOOGLE_CALENDAR_ID` | (Optional) Target calendar ID (default: `primary`) |
+| `GOOGLE_EVENT_COLOR` | (Optional) Event color (default: `tangerine`) |
 
 ### How booking works
 
