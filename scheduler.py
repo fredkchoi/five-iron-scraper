@@ -41,7 +41,7 @@ def save_targets(targets: list):
 def validate_targets(targets: list) -> list:
     """Return a list of error strings. Empty list means all targets are valid."""
     errors = []
-    valid_durations = {0.5, 1.0, 2.0}
+    valid_durations = {0.5, 1.0, 1.5, 2.0}
 
     for i, t in enumerate(targets):
         prefix = f"Target {i + 1}"
@@ -64,7 +64,7 @@ def validate_targets(targets: list) -> list:
         if dur is None:
             errors.append(f"{prefix}: missing 'duration_hours' field")
         elif dur not in valid_durations:
-            errors.append(f"{prefix}: duration_hours must be 0.5, 1, or 2 (got {dur})")
+            errors.append(f"{prefix}: duration_hours must be 0.5, 1, 1.5, or 2 (got {dur})")
 
         time_str = t.get("time")
         if time_str is not None:

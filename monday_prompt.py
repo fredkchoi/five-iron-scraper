@@ -17,7 +17,7 @@ TARGETS_FILE = os.path.join(os.path.dirname(__file__), "targets.json")
 LOCAL_TZ = ZoneInfo("America/New_York")
 GITHUB_REPOSITORY = os.getenv("GITHUB_REPOSITORY", "")
 DAYS_IN_ADVANCE = 15
-VALID_DURATIONS = [0.5, 1.0, 2.0]
+VALID_DURATIONS = [0.5, 1.0, 1.5, 2.0]
 
 
 def load_targets() -> list:
@@ -105,7 +105,7 @@ def ask_time(d: date) -> str:
 
 def ask_duration(d: date) -> float:
     while True:
-        raw = input(f"  Duration for {d.strftime('%A')} (0.5 / 1 / 2 hours) [default: 1]: ").strip()
+        raw = input(f"  Duration for {d.strftime('%A')} (0.5 / 1 / 1.5 / 2 hours) [default: 1]: ").strip()
         if not raw:
             return 1.0
         try:
@@ -114,7 +114,7 @@ def ask_duration(d: date) -> float:
                 return val
         except ValueError:
             pass
-        print("  Please enter 0.5, 1, or 2.")
+        print("  Please enter 0.5, 1, 1.5, or 2.")
 
 
 def interactive_prompt():

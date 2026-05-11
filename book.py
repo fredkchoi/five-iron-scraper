@@ -117,51 +117,74 @@ def _slots_for_duration(slots: list, duration_hours: float) -> list:
     )
 
 
+def find_session(slots: list, duration_hours: float, time_str: str = None) -> list:
+    """
+    Pick slot(s) that satisfy the requested session.
+    Returns a list of (slot, session_type_id) tuples — one entry for 0.5/1.0,
+    two entries for 1.5/2.0. Empty list means no valid combination is available.
+
+    For multi-slot durations, sub-sessions must be time-consecutive; bays may differ.
+    time_str pins only the FIRST sub-session's start.
+    """
+    def matches_time(s):
+        if not time_str:
+            return True
+        h, m = int(time_str.split(":")[0]), int(time_str.split(":")[1])
+        return s["start_time"].hour == h and s["start_time"].minute == m
+
+    if duration_hours == 0.5:
+        for s in _slots_for_duration(slots, 0.5):
+            if matches_time(s):
+                return [(s, _SESSION_TYPE_30MIN)]
+        return []
+
+    if duration_hours == 1.0:
+        for s in _slots_for_duration(slots, 1.0):
+            if matches_time(s):
+                return [(s, _SESSION_TYPE_60MIN)]
+        return []
+
+    if duration_hours == 1.5:
+        one_hr = _slots_for_duration(slots, 1.0)
+        half_hr = _slots_for_duration(slots, 0.5)
+        for first in one_hr:
+            if not matches_time(first):
+                continue
+            for second in half_hr:
+                if second["start_time"] == first["end_time"]:
+                    return [(first, _SESSION_TYPE_60MIN), (second, _SESSION_TYPE_30MIN)]
+        return []
+
+    if duration_hours == 2.0:
+        one_hr = _slots_for_duration(slots, 1.0)
+        for first in one_hr:
+            if not matches_time(first):
+                continue
+            for second in one_hr:
+                if second["start_time"] == first["end_time"]:
+                    return [(first, _SESSION_TYPE_60MIN), (second, _SESSION_TYPE_60MIN)]
+        return []
+
+    return []
+
+
 def attempt_booking(date_str: str, duration_hours: float = 1.0, time_str: str = None) -> list:
     """
-    Find available slot(s) and book them.
+    Find available slot(s) matching the request and book them.
 
-    time_str: optional "HH:MM" (24hr) to book a specific start time.
-              If omitted, books the first available post-9pm slot.
-    duration_hours=2: books two consecutive 1-hr slots on the same simulator.
+    time_str: optional "HH:MM" (24hr) for the first sub-session's start.
+              Omit to take the earliest available post-9pm slot.
+    For 1.5hr / 2hr, sub-sessions must be time-consecutive (any bay).
     Returns a list of booking confirmation dicts. Empty list means nothing booked.
     """
     slots = check_availability(date_str)
     if not slots:
         return []
 
-    if time_str:
-        h, m = int(time_str.split(":")[0]), int(time_str.split(":")[1])
-        slots = [s for s in slots if s["start_time"].hour == h and s["start_time"].minute == m]
-        if not slots:
-            print(f"[Error] No slots available at {time_str} on {date_str}")
-            return []
+    matched = find_session(slots, duration_hours, time_str)
+    if not matched:
+        if time_str:
+            print(f"[Error] No matching {duration_hours}hr session at {time_str} on {date_str}")
+        return []
 
-    if duration_hours == 0.5:
-        matching = _slots_for_duration(slots, 0.5)
-        if not matching:
-            return []
-        return [_post_booking(matching[0], _SESSION_TYPE_30MIN)]
-
-    if duration_hours == 1.0:
-        matching = _slots_for_duration(slots, 1.0)
-        if not matching:
-            return []
-        return [_post_booking(matching[0], _SESSION_TYPE_60MIN)]
-
-    # 2 hours: find two consecutive 1-hr slots on the same simulator (staffId)
-    one_hr = _slots_for_duration(slots, 1.0)
-    by_staff = {}
-    for s in one_hr:
-        by_staff.setdefault(s["staff_id"], []).append(s)
-
-    for staff_slots in by_staff.values():
-        staff_slots.sort(key=lambda s: s["start_time"])
-        for i in range(len(staff_slots) - 1):
-            a, b = staff_slots[i], staff_slots[i + 1]
-            if a["end_time"] == b["start_time"]:
-                first = _post_booking(a, _SESSION_TYPE_60MIN)
-                second = _post_booking(b, _SESSION_TYPE_60MIN)
-                return [first, second]
-
-    return []
+    return [_post_booking(slot, type_id) for slot, type_id in matched]

@@ -59,8 +59,8 @@ Pre-populate this file with all the dates you want to book — you can set the w
 {
   "targets": [
     {"date": "2026-06-03", "time": "21:00", "duration_hours": 1},
-    {"date": "2026-06-10", "time": "21:00", "duration_hours": 2},
-    {"date": "2026-06-10", "time": "22:00", "duration_hours": 1}
+    {"date": "2026-06-10", "time": "21:00", "duration_hours": 1.5},
+    {"date": "2026-06-17", "time": "21:00", "duration_hours": 2}
   ]
 }
 ```
@@ -71,7 +71,7 @@ Pre-populate this file with all the dates you want to book — you can set the w
 |---|---|---|
 | `date` | `YYYY-MM-DD` | The date you want to play |
 | `time` | `HH:MM` 24hr (optional) | Exact start time. Omit to take the first available post-9pm slot |
-| `duration_hours` | `0.5`, `1`, `2` | Session length. `2` = two consecutive 1-hr bookings on the same bay |
+| `duration_hours` | `0.5`, `1`, `1.5`, `2` | Session length. `1.5` = one 1-hr + one consecutive 0.5-hr; `2` = two consecutive 1-hr. For multi-slot durations, sub-sessions may land on different bays. |
 
 Multiple entries for the same date book multiple sessions that night. After each successful booking, the date is removed from the file automatically.
 
@@ -118,5 +118,6 @@ Scheduling runs entirely in the cloud — your PC can be off.
 | `monday-prompt.yml` | Every Monday ~9am ET | Emails a summary of upcoming booking nights for the next 2 weeks with a link to edit `targets.json` |
 | `morning-reminder.yml` | Daily ~9am ET | On booking days: emails token status and fix instructions if expired |
 | `midnight-booker.yml` | Nightly ~11:25pm ET | Validates targets, books at midnight, emails confirmation with booking details |
+| `cancellation-poller.yml` | Hourly | On polling targets: checks for cancellations and emails when your exact requested session opens |
 
 After receiving the Monday email, click the link, edit `targets.json` in the GitHub UI, and commit. The nightly job picks it up automatically.
