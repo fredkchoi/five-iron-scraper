@@ -1,0 +1,25 @@
+name: Morning Booking Reminder
+
+on:
+  schedule:
+    - cron: '0 13 * * *'  # 9am ET (EDT) daily — only sends email if tonight is a booking night
+  workflow_dispatch:
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Send morning reminder if booking tonight
+        run: python morning_reminder.py
+        env:
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
+          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+          LOCATION_ID: ${{ secrets.LOCATION_ID }}
+          PARTY_SIZE: ${{ secrets.PARTY_SIZE }}
+          FIVE_IRON_AUTH_TOKEN: ${{ secrets.FIVE_IRON_AUTH_TOKEN }}

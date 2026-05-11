@@ -1,0 +1,36 @@
+name: Midnight Booker
+
+on:
+  schedule:
+    # 11:25pm EDT (3:25 UTC) — script validates token immediately, then sleeps until midnight.
+    # In winter (EST) this fires at 10:25pm ET; the script will sleep ~95min until midnight.
+    - cron: '25 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  book:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Attempt midnight booking
+        run: python scheduler.py
+        env:
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
+          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+          LOCATION_ID: ${{ secrets.LOCATION_ID }}
+          PARTY_SIZE: ${{ secrets.PARTY_SIZE }}
+          FIVE_IRON_AUTH_TOKEN: ${{ secrets.FIVE_IRON_AUTH_TOKEN }}
+      - name: Commit updated targets.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add targets.json
+          git diff --staged --quiet || git commit -m "chore: update targets after booking attempt" && git push

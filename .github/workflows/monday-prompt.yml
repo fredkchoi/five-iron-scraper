@@ -1,0 +1,25 @@
+name: Monday Booking Prompt
+
+on:
+  schedule:
+    - cron: '0 13 * * 1'  # ~9am ET (EDT) every Monday
+  workflow_dispatch:       # Allow manual trigger from GitHub UI
+
+jobs:
+  send-prompt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Send weekly booking prompt email
+        run: python monday_prompt.py
+        env:
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
+          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+          LOCATION_ID: ${{ secrets.LOCATION_ID }}
+          PARTY_SIZE: ${{ secrets.PARTY_SIZE }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
