@@ -48,9 +48,17 @@ def main():
         duration_hours = target.get("duration_hours", 1.0)
         label = f"{date_str} {time_str or 'post-9pm'} {duration_hours}hr"
 
-        if date.fromisoformat(date_str) < today:
+        target_date = date.fromisoformat(date_str)
+        if target_date < today:
             print(f"Dropping expired polling target: {date_str}")
             continue
+        if target_date == today:
+            # Drop once the session start time has passed (or end of happy hour if no time specified)
+            h, m = (int(x) for x in time_str.split(":")) if time_str else (23, 0)
+            cutoff = datetime.now(LOCAL_TZ).replace(hour=h, minute=m, second=0, microsecond=0)
+            if datetime.now(LOCAL_TZ) >= cutoff:
+                print(f"Dropping expired polling target: {date_str} {time_str or '23:00'} has passed.")
+                continue
 
         print(f"Checking cancellations for {label}...")
         slots = check_availability(date_str)
@@ -68,7 +76,7 @@ def main():
 
         session_times = [
             f"{s['start_time'].strftime('%I:%M %p')}–{s['end_time'].strftime('%I:%M %p')}"
-            for s, _ in matched
+            for s in matched
         ]
         body = (
             f"A cancellation just opened up for Five Iron on {date_str}!\n\n"

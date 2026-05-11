@@ -48,19 +48,24 @@ def refresh_token() -> str:
     return access
 
 
-def _get_pricing(token: str, slot: dict) -> list:
+def _get_pricing(token: str, slots: list) -> list:
     """
-    POST /appointments/pricing to get the real sessionTypeId and cost for a slot.
+    POST /appointments/pricing for one or more consecutive slots in a single call.
+    Covers the full time range with all bay IDs involved.
     Returns a list of staff pricing entries, each with costSummary[].
     """
+    start = min(s["start_time"] for s in slots)
+    end = max(s["end_time"] for s in slots)
+    staff_ids = list({s["staff_id"] for s in slots})
+
     resp = requests.post(
         f"{BASE_URL}/appointments/pricing",
         json={
             "email": FIVE_IRON_EMAIL,
-            "startDateTime": slot["start_time"].strftime("%Y-%m-%dT%H:%M:%S.000Z"),
-            "endDateTime": slot["end_time"].strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            "startDateTime": start.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            "endDateTime": end.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
             "locationId": LOCATION_ID,
-            "staffIds": [slot["staff_id"]],
+            "staffIds": staff_ids,
             "partySize": PARTY_SIZE,
         },
         headers={"Authorization": f"Bearer {token}"},
@@ -110,7 +115,7 @@ def _post_booking(token: str, pricing_result: list) -> dict:
     bookings = resp.json()
     if not isinstance(bookings, list) or not any(b.get("status") == "Booked" for b in bookings):
         raise RuntimeError(f"Unexpected booking response: {resp.text[:200]}")
-    return bookings[0]
+    return bookings
 
 
 def _slots_for_duration(slots: list, duration_hours: float) -> list:
@@ -185,13 +190,12 @@ def attempt_booking(date_str: str, duration_hours: float = 1.0, time_str: str = 
             print(f"[Error] No matching {duration_hours}hr session at {time_str} on {date_str}")
         return []
 
-    results = []
-    for slot in matched:
-        pricing = _get_pricing(token, slot)
-        booking = _post_booking(token, pricing)
-        results.append(booking)
-        start = datetime.fromisoformat(booking["startDateTime"]).strftime("%I:%M %p")
-        end = datetime.fromisoformat(booking["endDateTime"]).strftime("%I:%M %p")
-        print(f"Booked: {start}-{end}  ID={booking['id']}")
-
-    return results
+    pricing = _get_pricing(token, matched)
+    bookings = _post_booking(token, pricing)
+    if not isinstance(bookings, list):
+        bookings = [bookings]
+    for b in bookings:
+        start = datetime.fromisoformat(b["startDateTime"]).strftime("%I:%M %p")
+        end = datetime.fromisoformat(b["endDateTime"]).strftime("%I:%M %p")
+        print(f"Booked: {start}-{end}  ID={b['id']}")
+    return bookings
