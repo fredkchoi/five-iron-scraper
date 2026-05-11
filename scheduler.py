@@ -184,10 +184,14 @@ def main():
     check_token_or_warn(date_str)
     wait_until_midnight_et()
 
+    failed = []
     for target in tonight:
-        book_target(target)
+        success = book_target(target)
+        if not success:
+            failed.append({**target, "status": "polling"})
 
-    updated = [t for t in targets if t.get("date") != date_str]
+    # Remove tonight's targets and re-add any that failed as polling targets
+    updated = [t for t in targets if t.get("date") != date_str] + failed
     save_targets(updated)
 
 
