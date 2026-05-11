@@ -8,6 +8,7 @@ Also usable interactively to add dates to targets.json.
 import sys
 import json
 import os
+import time
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from notifier import send_email
@@ -32,6 +33,19 @@ def write_targets(entries: list):
     print(f"Saved {len(entries)} session(s) to targets.json")
 
 
+def wait_until_9am_et():
+    # GitHub cron runs in UTC, so the runner fires at 9am EDT but 8am EST.
+    # Sleep to land at exactly 9am ET. Skip for manual runs so testing is instant.
+    if os.getenv("GITHUB_EVENT_NAME") != "schedule":
+        return
+    now = datetime.now(LOCAL_TZ)
+    target = now.replace(hour=9, minute=0, second=0, microsecond=0)
+    sleep_secs = (target - now).total_seconds()
+    if sleep_secs > 0:
+        print(f"Waiting {sleep_secs:.0f}s ({sleep_secs / 60:.1f} min) until 9am ET...")
+        time.sleep(sleep_secs)
+
+
 def get_upcoming_booking_nights() -> list:
     """Return targets that have a booking night within the next 14 days."""
     today = datetime.now(LOCAL_TZ).date()
@@ -49,6 +63,7 @@ def get_upcoming_booking_nights() -> list:
 
 
 def send_summary_email():
+    wait_until_9am_et()
     edit_url = f"https://github.com/{GITHUB_REPOSITORY}/edit/master/targets.json"
     upcoming = get_upcoming_booking_nights()
 

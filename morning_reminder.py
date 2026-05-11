@@ -5,6 +5,7 @@ so there's time to recapture it before midnight.
 
 import json
 import os
+import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from notifier import send_email
@@ -24,11 +25,26 @@ def get_tonight_targets() -> list:
     return [t for t in targets if t.get("date") == booking_open_date]
 
 
+def wait_until_9am_et():
+    # GitHub cron runs in UTC, so the runner fires at 9am EDT but 8am EST.
+    # Sleep to land at exactly 9am ET. Skip for manual runs so testing is instant.
+    if os.getenv("GITHUB_EVENT_NAME") != "schedule":
+        return
+    now = datetime.now(LOCAL_TZ)
+    target = now.replace(hour=9, minute=0, second=0, microsecond=0)
+    sleep_secs = (target - now).total_seconds()
+    if sleep_secs > 0:
+        print(f"Waiting {sleep_secs:.0f}s ({sleep_secs / 60:.1f} min) until 9am ET...")
+        time.sleep(sleep_secs)
+
+
 def main():
     tonight = get_tonight_targets()
     if not tonight:
         print("No booking tonight — nothing to remind.")
         return
+
+    wait_until_9am_et()
 
     date_str = tonight[0]["date"]
     sessions = [f"  • {t.get('time', 'first post-9pm')} — {t['duration_hours']}hr" for t in tonight]
