@@ -2,9 +2,9 @@ name: Midnight Booker
 
 on:
   schedule:
-    # 11:25pm EDT (3:25 UTC) — script waits until midnight, then books.
-    # In winter (EST) this fires at 10:25pm ET; the script will sleep ~95min until midnight.
-    - cron: '25 3 * * *'
+    # 11:55pm EDT (3:55 UTC) — script gets token (~2min), then books at midnight.
+    # In winter (EST) this fires at 10:55pm ET; the script will sleep ~65min until midnight.
+    - cron: '55 3 * * *'
   workflow_dispatch:
 
 jobs:
