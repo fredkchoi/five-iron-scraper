@@ -2,7 +2,7 @@ name: Midnight Booker
 
 on:
   schedule:
-    # 11:25pm EDT (3:25 UTC) — script validates token immediately, then sleeps until midnight.
+    # 11:25pm EDT (3:25 UTC) — script waits until midnight, then books.
     # In winter (EST) this fires at 10:25pm ET; the script will sleep ~95min until midnight.
     - cron: '25 3 * * *'
   workflow_dispatch:
@@ -27,7 +27,7 @@ jobs:
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
           LOCATION_ID: ${{ secrets.LOCATION_ID }}
           PARTY_SIZE: ${{ secrets.PARTY_SIZE }}
-          FIVE_IRON_AUTH_TOKEN: ${{ secrets.FIVE_IRON_AUTH_TOKEN }}
+          FIVE_IRON_EMAIL: ${{ secrets.FIVE_IRON_EMAIL }}
       - name: Commit updated targets.json
         run: |
           git config user.name "github-actions[bot]"

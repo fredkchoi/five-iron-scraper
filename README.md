@@ -1,15 +1,15 @@
 # Five Iron Scraper
 
-Five Iron Golf offers a special rate of **$29/hour** on weekday simulator sessions after 9pm — significantly cheaper than the standard $75/hour daytime rate. The catch: bookings open exactly 2 weeks in advance at midnight ET, and these slots get snapped up almost instantly due to the price.
+Five Iron Golf offers a special **$29/hour** simulator rate during "5i After Dark" — Sun–Thu after 9pm and Fri–Sat after 10pm — significantly cheaper than the standard $75–90/hour daytime rate. The catch: bookings open exactly 2 weeks in advance at midnight ET, and these slots get snapped up almost instantly due to the price.
 
 This tool automates the entire process. It watches your target dates, fires at midnight the moment bookings open, and grabs your slot before anyone else can.
 
 ## Features
 
 - **Availability notifier** (`main.py`) — polls on demand and emails when slots open
-- **Auto-booker** — reserves slots at exactly midnight ET when Five Iron releases them 2 weeks out
-- **Weekly prompt** — emails you every Monday asking which dates to target; you edit one JSON file to confirm
-- **Morning reminder** — emails you at 9am on booking days with token status and fix instructions if expired
+- **Auto-booker** — books at midnight ET when Five Iron releases slots 2 weeks out; also books immediately if you add a date that's already within the 2-week window
+- **Weekly prompt** — emails you every Monday with upcoming booking nights; edit one JSON file to confirm
+- **Cancellation poller** — if midnight booking fails, watches hourly for cancellations and emails when your slot opens
 
 ## Setup
 
@@ -28,22 +28,18 @@ cp .env.example .env
 | `RECIPIENT_EMAIL` | Email address to receive notifications |
 | `LOCATION_ID` | Your Five Iron location ID (see below) |
 | `PARTY_SIZE` | Number of people (default: 2) |
-| `FIVE_IRON_AUTH_TOKEN` | Bearer token captured from the Five Iron app (see below) |
 | `FIVE_IRON_EMAIL` | Your Five Iron account email |
-| `FIVE_IRON_SESSION_TYPE_ID` | `44` for 1-hour sessions, `45` for 30-min (default: 44) |
-| `FIVE_IRON_PROMO_CODE` | Promo code for the after-9pm special (default: `five`) |
 
-### Capturing your auth token
+### How booking works
 
-Five Iron uses passwordless login (Google OAuth or magic link), so we capture the session token once and reuse it. Tokens last ~24 hours.
+The bot authenticates fresh before every booking run — no stored token needed:
 
-1. Go to [fiveirongolf.com](https://fiveirongolf.com) and open DevTools (F12) → **Network** tab
-2. Log in and browse available times
-3. Click any request to `api.booking.fiveirongolf.com` → **Headers** → **Request Headers**
-4. Copy the `Authorization` value — it looks like `Bearer eyJ...`
-5. Save just the token part (after `Bearer `) as `FIVE_IRON_AUTH_TOKEN` in `.env` and in your GitHub secret
+1. `POST /auth/login` → triggers a magic link email to your Five Iron account
+2. Gmail IMAP polls for the link (up to 120 seconds) → `GET /auth/verify` → session token
+3. `POST /appointments/pricing` — gets the correct session type and confirmed price for the slot
+4. `POST /appointments/book/{locationId}` — places the booking using the pricing result
 
-When the token expires, repeat these steps and update both places.
+Happy hour pricing (`$29/hr`) is resolved automatically in step 3 — no promo code needed.
 
 ### Finding your Location ID
 
@@ -96,9 +92,10 @@ python monday_prompt.py
 
 ```bash
 python scheduler.py
-# Validates targets.json, checks if any target opens tonight at midnight ET
-# If yes: validates token, waits until midnight, retries booking for up to 5 min per session
-# Emails you on success (with booking ID and times) or failure
+# Validates targets.json
+# Already-open targets (within 2-week window): books immediately
+# Tonight's target (exactly 14 days out): waits until midnight, then books
+# On failure: moves target to polling; emails you either way
 ```
 
 ## GitHub Actions (automated, no PC required)
@@ -116,8 +113,7 @@ Scheduling runs entirely in the cloud — your PC can be off.
 | Workflow | Schedule | What it does |
 |---|---|---|
 | `monday-prompt.yml` | Every Monday ~9am ET | Emails a summary of upcoming booking nights for the next 2 weeks with a link to edit `targets.json` |
-| `morning-reminder.yml` | Daily ~9am ET | On booking days: emails token status and fix instructions if expired |
-| `midnight-booker.yml` | Nightly ~11:25pm ET | Validates targets, books at midnight, emails confirmation with booking details |
+| `midnight-booker.yml` | Nightly ~11:25pm ET | Gets fresh session token, books at midnight, emails confirmation with booking details |
 | `cancellation-poller.yml` | Hourly | On polling targets: checks for cancellations and emails when your exact requested session opens |
 
 After receiving the Monday email, click the link, edit `targets.json` in the GitHub UI, and commit. The nightly job picks it up automatically.

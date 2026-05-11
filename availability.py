@@ -1,11 +1,12 @@
 import requests
 from datetime import datetime, timedelta
-from config import LOCATION_ID, PARTY_SIZE
+from config import LOCATION_ID, PARTY_SIZE, is_happy_hour
 
 
 def check_availability(date_str: str):
     """
-    Return all available post-9pm slots for the given date, any duration.
+    Return all available 5i After Dark slots for the given date, any duration.
+    Sun–Thu: 9pm+, Fri–Sat: 10pm+.
     Each slot dict contains all fields needed to make a booking.
     """
     url = (
@@ -25,7 +26,7 @@ def check_availability(date_str: str):
     results = []
     for slot in data:
         start_time = datetime.fromisoformat(slot["time"].replace("Z", ""))
-        if start_time.hour >= 21:
+        if is_happy_hour(start_time):
             for avail in slot["availabilities"]:
                 for duration_entry in avail["durations"]:
                     duration_minutes = duration_entry["duration"]

@@ -1,112 +1,115 @@
-# Five Iron booking implementation.
-#
-# Auth uses a bearer token captured once after manual login (passwordless — Google
-# or magic link). Token typically lasts 24h; recapture via DevTools when it expires:
-#   1. Go to fiveirongolf.com, open DevTools (F12) → Network tab
-#   2. Log in and browse available times
-#   3. Copy the Authorization header from any api.booking.fiveirongolf.com request
-#   4. Store the token (after "Bearer ") as FIVE_IRON_AUTH_TOKEN in .env / GitHub secrets
+"""
+Five Iron booking — authenticated 3-step flow:
+  1. POST /auth/login (no bookingUUID) + poll Gmail + GET /auth/verify  -> session token
+  2. POST /appointments/pricing                                          -> real sessionTypeId + cost
+  3. POST /appointments/book/{locationId}                                -> confirmed booking
 
-import base64
-import json
+No pre-booking or promo code needed; happy hour pricing applied automatically by the pricing step.
+"""
+
+import time
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from availability import check_availability
 from config import (
-    FIVE_IRON_AUTH_TOKEN,
     FIVE_IRON_EMAIL,
-    FIVE_IRON_SESSION_TYPE_ID,
-    FIVE_IRON_PROMO_CODE,
     LOCATION_ID,
     PARTY_SIZE,
+    SENDER_EMAIL,
+    SENDER_PASSWORD,
 )
+from token_refresh import fetch_fresh_token
 
 BASE_URL = "https://api.booking.fiveirongolf.com"
 _TZ = ZoneInfo("America/New_York")
-_SESSION_TYPE_30MIN = 45
-_SESSION_TYPE_60MIN = 44
+
+_token_override = ""
 
 
-def _decode_jwt_expiry(token: str):
-    """Decode the exp claim from a JWT without verifying the signature."""
-    try:
-        payload_b64 = token.split(".")[1]
-        payload_b64 += "=" * (-len(payload_b64) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
-        exp = payload.get("exp")
-        return datetime.fromtimestamp(exp, _TZ) if exp else None
-    except Exception:
-        return None
+def set_token(token: str):
+    global _token_override
+    _token_override = token
 
 
-def validate_token() -> tuple:
+def get_valid_token() -> str:
+    """Return the current in-memory token, or '' if none."""
+    return _token_override
+
+
+def refresh_token() -> str:
     """
-    Check that the token is present, well-formed, and not expired.
-    Returns (is_valid, reason) — reason is empty when valid, descriptive when not.
+    Fetch a fresh session token via magic link + Gmail IMAP.
+    Stores it in memory and returns it. Returns '' on failure.
     """
-    if not FIVE_IRON_AUTH_TOKEN:
-        return False, "FIVE_IRON_AUTH_TOKEN is not set in .env / GitHub secrets"
-    parts = FIVE_IRON_AUTH_TOKEN.split(".")
-    if len(parts) != 3 or not FIVE_IRON_AUTH_TOKEN.startswith("eyJ"):
-        return False, "FIVE_IRON_AUTH_TOKEN does not look like a valid JWT"
-
-    exp = _decode_jwt_expiry(FIVE_IRON_AUTH_TOKEN)
-    if exp is not None:
-        now = datetime.now(_TZ)
-        if exp < now:
-            return False, f"Token expired {exp.strftime('%b %d at %I:%M %p ET')}"
-        hours_left = (exp - now).total_seconds() / 3600
-        if hours_left < 2:
-            return False, f"Token expires in {hours_left:.1f}h ({exp.strftime('%I:%M %p ET')}) — too close to midnight"
-        return True, f"Token valid until {exp.strftime('%b %d at %I:%M %p ET')} ({hours_left:.0f}h remaining)"
-
-    return True, "Token looks valid (no expiry claim found)"
+    access, _ = fetch_fresh_token(FIVE_IRON_EMAIL, LOCATION_ID, SENDER_EMAIL, SENDER_PASSWORD)
+    if access:
+        set_token(access)
+    return access
 
 
-def _post_booking(slot: dict, session_type_id: int) -> dict:
+def _get_pricing(token: str, slot: dict) -> list:
     """
-    POST a single booking. Returns the booking dict from the API on success,
-    raises on HTTP error.
+    POST /appointments/pricing to get the real sessionTypeId and cost for a slot.
+    Returns a list of staff pricing entries, each with costSummary[].
     """
-    valid, reason = validate_token()
-    if not valid:
-        raise ValueError(f"Invalid auth token: {reason}")
+    resp = requests.post(
+        f"{BASE_URL}/appointments/pricing",
+        json={
+            "email": FIVE_IRON_EMAIL,
+            "startDateTime": slot["start_time"].strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            "endDateTime": slot["end_time"].strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            "locationId": LOCATION_ID,
+            "staffIds": [slot["staff_id"]],
+            "partySize": PARTY_SIZE,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=15,
+    )
+    if not resp.ok:
+        print(f"[pricing] HTTP {resp.status_code}: {resp.text[:300]}")
+        resp.raise_for_status()
+    return resp.json()
 
-    is_late_night = slot["start_time"].hour >= 21
-    promo = FIVE_IRON_PROMO_CODE if is_late_night else ""
 
-    payload = {
-        "email": FIVE_IRON_EMAIL,
-        "promoCode": promo,
-        "partySize": PARTY_SIZE,
-        "leftHanded": False,
-        "clubRental": False,
-        "appointments": [
-            {
-                "startDateTime": slot["start_time"].strftime("%Y-%m-%dT%H:%M:%S"),
-                "endDateTime": slot["end_time"].strftime("%Y-%m-%dT%H:%M:%S"),
-                "staffId": slot["staff_id"],
+def _post_booking(token: str, pricing_result: list) -> dict:
+    """
+    POST /appointments/book/{locationId} using appointments built from the pricing result.
+    Returns the first booking dict from the API response.
+    """
+    appointments = []
+    for entry in pricing_result:
+        for cs in entry.get("costSummary", []):
+            appointments.append({
+                "startDateTime": cs["startTime"],
+                "endDateTime": cs["endTime"],
+                "staffId": entry["staffId"],
+                "sessionTypeId": cs["sessionTypeId"],
                 "notes": "",
-                "sessionTypeId": session_type_id,
                 "resourceId": None,
-                "cost": slot["cost"],
-            }
-        ],
-        "addOns": [],
-        "multiSportSimRental": False,
-    }
+                "cost": cs["price"],
+            })
 
-    response = requests.post(
+    resp = requests.post(
         f"{BASE_URL}/appointments/book/{LOCATION_ID}",
-        json=payload,
-        headers={"Authorization": f"Bearer {FIVE_IRON_AUTH_TOKEN}", "Content-Type": "application/json"},
+        json={
+            "email": FIVE_IRON_EMAIL,
+            "partySize": PARTY_SIZE,
+            "leftHanded": False,
+            "clubRental": False,
+            "appointments": appointments,
+            "addOns": [],
+            "multiSportSimRental": False,
+        },
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         timeout=60,
     )
-    response.raise_for_status()
-    bookings = response.json()
+    if not resp.ok:
+        print(f"[book] HTTP {resp.status_code}: {resp.text[:400]}")
+    resp.raise_for_status()
+    bookings = resp.json()
     if not isinstance(bookings, list) or not any(b.get("status") == "Booked" for b in bookings):
-        raise RuntimeError(f"Unexpected booking response: {response.text[:200]}")
+        raise RuntimeError(f"Unexpected booking response: {resp.text[:200]}")
     return bookings[0]
 
 
@@ -119,12 +122,10 @@ def _slots_for_duration(slots: list, duration_hours: float) -> list:
 
 def find_session(slots: list, duration_hours: float, time_str: str = None) -> list:
     """
-    Pick slot(s) that satisfy the requested session.
-    Returns a list of (slot, session_type_id) tuples — one entry for 0.5/1.0,
-    two entries for 1.5/2.0. Empty list means no valid combination is available.
-
-    For multi-slot durations, sub-sessions must be time-consecutive; bays may differ.
-    time_str pins only the FIRST sub-session's start.
+    Pick slot(s) satisfying the requested session.
+    Returns a list of slot dicts — one entry for 0.5/1.0hr, two for 1.5/2.0hr.
+    For multi-slot durations, sub-sessions must be time-consecutive (any bay).
+    time_str pins only the first sub-session's start.
     """
     def matches_time(s):
         if not time_str:
@@ -133,16 +134,10 @@ def find_session(slots: list, duration_hours: float, time_str: str = None) -> li
         return s["start_time"].hour == h and s["start_time"].minute == m
 
     if duration_hours == 0.5:
-        for s in _slots_for_duration(slots, 0.5):
-            if matches_time(s):
-                return [(s, _SESSION_TYPE_30MIN)]
-        return []
+        return next(([s] for s in _slots_for_duration(slots, 0.5) if matches_time(s)), [])
 
     if duration_hours == 1.0:
-        for s in _slots_for_duration(slots, 1.0):
-            if matches_time(s):
-                return [(s, _SESSION_TYPE_60MIN)]
-        return []
+        return next(([s] for s in _slots_for_duration(slots, 1.0) if matches_time(s)), [])
 
     if duration_hours == 1.5:
         one_hr = _slots_for_duration(slots, 1.0)
@@ -152,7 +147,7 @@ def find_session(slots: list, duration_hours: float, time_str: str = None) -> li
                 continue
             for second in half_hr:
                 if second["start_time"] == first["end_time"]:
-                    return [(first, _SESSION_TYPE_60MIN), (second, _SESSION_TYPE_30MIN)]
+                    return [first, second]
         return []
 
     if duration_hours == 2.0:
@@ -162,7 +157,7 @@ def find_session(slots: list, duration_hours: float, time_str: str = None) -> li
                 continue
             for second in one_hr:
                 if second["start_time"] == first["end_time"]:
-                    return [(first, _SESSION_TYPE_60MIN), (second, _SESSION_TYPE_60MIN)]
+                    return [first, second]
         return []
 
     return []
@@ -170,13 +165,16 @@ def find_session(slots: list, duration_hours: float, time_str: str = None) -> li
 
 def attempt_booking(date_str: str, duration_hours: float = 1.0, time_str: str = None) -> list:
     """
-    Find available slot(s) matching the request and book them.
+    Find available slot(s) and book them.
 
+    Requires a valid in-memory token (set via set_token() or refresh_token()).
     time_str: optional "HH:MM" (24hr) for the first sub-session's start.
-              Omit to take the earliest available post-9pm slot.
-    For 1.5hr / 2hr, sub-sessions must be time-consecutive (any bay).
     Returns a list of booking confirmation dicts. Empty list means nothing booked.
     """
+    token = get_valid_token()
+    if not token:
+        raise ValueError("No session token — call refresh_token() before attempt_booking()")
+
     slots = check_availability(date_str)
     if not slots:
         return []
@@ -187,4 +185,13 @@ def attempt_booking(date_str: str, duration_hours: float = 1.0, time_str: str = 
             print(f"[Error] No matching {duration_hours}hr session at {time_str} on {date_str}")
         return []
 
-    return [_post_booking(slot, type_id) for slot, type_id in matched]
+    results = []
+    for slot in matched:
+        pricing = _get_pricing(token, slot)
+        booking = _post_booking(token, pricing)
+        results.append(booking)
+        start = datetime.fromisoformat(booking["startDateTime"]).strftime("%I:%M %p")
+        end = datetime.fromisoformat(booking["endDateTime"]).strftime("%I:%M %p")
+        print(f"Booked: {start}-{end}  ID={booking['id']}")
+
+    return results

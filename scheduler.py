@@ -5,10 +5,9 @@ Triggered by GitHub Actions at ~11:25pm ET, or run manually for testing.
 Flow:
   1. Load and validate targets.json — email errors and exit if invalid
   2. Check if any target opens tonight at midnight
-  3. Validate auth token — email warning if bad (still proceeds to midnight)
-  4. Wait until midnight ET
-  5. Book each session for tonight's target; email result per booking
-  6. Remove tonight's target from targets.json
+  3. Wait until midnight ET
+  4. Book each session for tonight's target; email result per booking
+  5. Remove tonight's target from targets.json
 """
 
 import json
@@ -79,29 +78,20 @@ def validate_targets(targets: list) -> list:
 
 
 def get_tonight_targets(targets: list) -> list:
-    """Return all targets whose bookings open tonight at midnight."""
+    """Return all targets whose bookings open tonight at midnight (exactly 15 days out)."""
     today = datetime.now(LOCAL_TZ).date()
     booking_open_date = (today + timedelta(days=DAYS_IN_ADVANCE)).isoformat()
     return [t for t in targets if t.get("date") == booking_open_date]
 
 
-def check_token_or_warn(date_str: str):
-    from book import validate_token
-    valid, reason = validate_token()
-    if not valid:
-        now_et = datetime.now(LOCAL_TZ).strftime("%I:%M %p ET")
-        body = (
-            f"Five Iron booking for {date_str} is scheduled for tonight at midnight ET, "
-            f"but the auth token check failed at {now_et}:\n\n"
-            f"  {reason}\n\n"
-            "Update FIVE_IRON_AUTH_TOKEN in your GitHub secrets and re-run the "
-            "workflow manually before midnight if you want the booking to succeed.\n\n"
-            "— Your Five Iron Bot"
-        )
-        print(f"[Warning] Token invalid: {reason}")
-        send_email(subject=f"Action required: Five Iron token invalid for {date_str}", body=body)
-    else:
-        print(f"Token check passed: {reason}")
+def get_already_open_targets(targets: list) -> list:
+    """Return targets whose booking window is already open (1–14 days out)."""
+    today = datetime.now(LOCAL_TZ).date()
+    return [
+        t for t in targets
+        if today.isoformat() < t.get("date", "") <= (today + timedelta(days=DAYS_IN_ADVANCE - 1)).isoformat()
+    ]
+
 
 
 def wait_until_midnight_et():
@@ -174,24 +164,51 @@ def main():
         return
 
     tonight = get_tonight_targets(targets)
-    if not tonight:
-        print(f"No bookings open tonight. Current targets: {[t['date'] for t in targets]}")
+    already_open = get_already_open_targets(targets)
+
+    if not tonight and not already_open:
+        print(f"No bookings to attempt tonight. Current targets: {[t['date'] for t in targets]}")
         return
 
-    date_str = tonight[0]["date"]
-    print(f"Tonight: {len(tonight)} session(s) for {date_str} open at midnight ET.")
-
-    check_token_or_warn(date_str)
-    wait_until_midnight_et()
+    # Get a fresh session token before doing anything time-sensitive
+    print("Getting session token via magic link...")
+    from book import refresh_token
+    token = refresh_token()
+    if not token:
+        dates = [t["date"] for t in tonight + already_open]
+        body = (
+            f"Five Iron booking(s) for {', '.join(dates)} could not proceed — "
+            "magic link flow failed, no session token obtained.\n\n"
+            "Check that FIVE_IRON_EMAIL, SENDER_EMAIL, and SENDER_PASSWORD are set correctly.\n\n"
+            "— Your Five Iron Bot"
+        )
+        print(body)
+        send_email(subject="Action required: Five Iron token refresh failed", body=body)
+        return
+    print("Session token obtained.")
 
     failed = []
-    for target in tonight:
+
+    # Already-open targets: booking window is live, try immediately (no midnight wait)
+    for target in already_open:
+        print(f"Attempting already-open target: {target['date']}")
         success = book_target(target)
         if not success:
             failed.append({**target, "status": "polling"})
 
-    # Remove tonight's targets and re-add any that failed as polling targets
-    updated = [t for t in targets if t.get("date") != date_str] + failed
+    # Midnight targets: wait until 12:00am then book
+    if tonight:
+        date_str = tonight[0]["date"]
+        print(f"Tonight: {len(tonight)} session(s) for {date_str} open at midnight ET.")
+        wait_until_midnight_et()
+        for target in tonight:
+            success = book_target(target)
+            if not success:
+                failed.append({**target, "status": "polling"})
+
+    # Remove all attempted targets; re-add failures as polling targets
+    attempted_dates = {t["date"] for t in tonight + already_open}
+    updated = [t for t in targets if t.get("date") not in attempted_dates] + failed
     save_targets(updated)
 
 
