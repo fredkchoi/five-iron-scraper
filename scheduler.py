@@ -105,6 +105,17 @@ def wait_until_midnight_et():
         print("Already past midnight ET — proceeding immediately.")
 
 
+def _add_calendar_event(start_dt: datetime, end_dt: datetime):
+    """Create a Google Calendar event if credentials are configured."""
+    if not os.getenv("GOOGLE_REFRESH_TOKEN"):
+        return
+    try:
+        from gcal import create_booking_event
+        create_booking_event(start_dt, end_dt)
+    except Exception as e:
+        print(f"[gcal] Skipping calendar event: {e}")
+
+
 def book_target(target: dict) -> bool:
     """Attempt to book a single target entry. Returns True if all sessions booked."""
     from book import attempt_booking
@@ -124,9 +135,10 @@ def book_target(target: dict) -> bool:
             if bookings:
                 lines = []
                 for b in bookings:
-                    start = datetime.fromisoformat(b["startDateTime"]).strftime("%I:%M %p")
-                    end = datetime.fromisoformat(b["endDateTime"]).strftime("%I:%M %p")
-                    lines.append(f"  • {start}–{end}  (ID: {b['id']})")
+                    start = datetime.fromisoformat(b["startDateTime"])
+                    end = datetime.fromisoformat(b["endDateTime"])
+                    lines.append(f"  • {start.strftime('%I:%M %p')}–{end.strftime('%I:%M %p')}  (ID: {b['id']})")
+                    _add_calendar_event(start, end)
                 body = (
                     f"Successfully booked Five Iron on {date_str}!\n\n"
                     + "\n".join(lines)

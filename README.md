@@ -10,6 +10,7 @@ This tool automates the entire process. It watches your target dates, fires at m
 - **Auto-booker** — books at midnight ET when Five Iron releases slots 2 weeks out; also books immediately if you add a date that's already within the 2-week window
 - **Weekly prompt** — emails you every Monday with upcoming booking nights; edit one JSON file to confirm
 - **Cancellation poller** — if midnight booking fails, watches hourly for cancellations and emails when your slot opens
+- **Google Calendar** — optionally creates an event on any calendar (including shared) after each successful booking
 
 ## Setup
 
@@ -40,6 +41,27 @@ The bot authenticates fresh before every booking run — no stored token needed:
 4. `POST /appointments/book/{locationId}` — places the booking using the pricing result
 
 Happy hour pricing (`$29/hr`) is resolved automatically in step 3 — no promo code needed.
+
+### Google Calendar (optional)
+
+After each successful booking the bot can automatically create a calendar event. To enable it:
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) → create a project → enable the **Google Calendar API**
+2. **APIs & Services → Credentials → Create Credentials → OAuth client ID** — choose **Desktop app**
+3. Add the client ID and secret to `.env`
+4. Add yourself as a test user: **OAuth consent screen → Test users → Add users**
+5. Run `python setup_gcal.py` — it opens a browser, you approve, it prints your `GOOGLE_REFRESH_TOKEN`
+6. Find your calendar ID: Google Calendar → gear → Settings → click your calendar → **Integrate calendar → Calendar ID**
+
+| Variable | Description |
+|---|---|
+| `GOOGLE_CLIENT_ID` | OAuth2 client ID from Google Cloud Console |
+| `GOOGLE_CLIENT_SECRET` | OAuth2 client secret |
+| `GOOGLE_REFRESH_TOKEN` | Obtained once via `python setup_gcal.py` |
+| `GOOGLE_CALENDAR_ID` | Target calendar ID (default: `primary`). Use the `@group.calendar.google.com` ID for shared calendars |
+| `GOOGLE_EVENT_COLOR` | Event color: `tomato`, `flamingo`, `tangerine`, `banana`, `sage`, `basil`, `peacock`, `blueberry`, `lavender`, `grape`, `graphite` (default: `tangerine`) |
+
+If `GOOGLE_REFRESH_TOKEN` is not set, calendar integration is silently skipped.
 
 ### Finding your Location ID
 
@@ -105,7 +127,7 @@ Scheduling runs entirely in the cloud — your PC can be off.
 ### Setup
 
 1. Push this repo to GitHub (private recommended)
-2. Go to **Settings → Secrets and variables → Actions** and add all variables from `.env` as repository secrets
+2. Go to **Settings → Secrets and variables → Actions** and add all variables from `.env` as repository secrets (Google Calendar secrets are optional)
 3. Enable Actions on the repo
 
 ### How it works
