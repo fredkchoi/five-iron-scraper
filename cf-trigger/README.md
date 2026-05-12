@@ -10,7 +10,8 @@ Cloudflare cron fires at `0 3 * * *` (03:00 UTC, = 11:00pm EDT / 10:00pm EST) �
 
 1. **Create a fine-grained GitHub PAT** at https://github.com/settings/personal-access-tokens/new
    - Repository access: only your `five-iron-scraper` fork
-   - Repository permissions: `Actions: Read and write`, `Contents: Read-only`, `Metadata: Read-only`
+   - Repository permissions: `Contents: Read and write`, `Metadata: Read-only`
+   - (Note: `repository_dispatch` requires `Contents: write` despite the endpoint living under `/dispatches` — GitHub's docs are misleading on this.)
 2. **Edit `wrangler.jsonc`** — set `GITHUB_REPO` to your fork's `owner/repo`.
 3. **Store the PAT as a Worker secret**:
    ```bash
