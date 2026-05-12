@@ -140,9 +140,15 @@ Scheduling runs entirely in the cloud — your PC can be off.
 | Workflow | Schedule | What it does |
 |---|---|---|
 | `monday-prompt.yml` | Every Monday ~9am ET | Emails a summary of upcoming booking nights for the next 2 weeks with a link to edit `targets.json` |
-| `midnight-booker.yml` | Nightly ~11:00pm ET | Gets fresh session token, waits until midnight, books, emails confirmation with booking details |
+| `midnight-booker.yml` | Nightly 11:00pm ET (Cloudflare Worker `repository_dispatch`; GHA `schedule` as backup) | Gets fresh session token, waits until midnight, books, emails confirmation with booking details |
 | `cancellation-poller.yml` | Hourly | On polling targets: checks for cancellations and emails when your exact requested session opens |
 | `validate-targets.yml` | On push/PR to `targets.json` | Lints `targets.json` — blocks merge if dates are invalid, in the past, not during happy hour, or have duplicate entries |
+
+### Cloudflare Worker trigger (recommended)
+
+GitHub Actions `schedule:` cron is unreliable for time-critical jobs — runs are routinely delayed 25–55min and occasionally dropped entirely. A separate Cloudflare Worker fires `repository_dispatch` at 03:00 UTC daily as the primary trigger; the GHA `schedule` cron stays in place as a backup.
+
+The Worker lives in a separate local project (e.g. `~/Documents/five-iron-trigger/`) and is deployed to Cloudflare via Wrangler. It stores a GitHub fine-grained PAT (scoped to `actions: write` on this repo only) as a Worker secret and POSTs to `https://api.github.com/repos/<owner>/<repo>/dispatches` with `{"event_type": "midnight-booker"}`. Manage with `npx wrangler deploy` / `npx wrangler tail`.
 
 ### Linting targets.json locally
 
