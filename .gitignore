@@ -10,3 +10,9 @@ build/
 .pytest_cache/
 logs/
 .claude/
+
+# cf-trigger (Cloudflare Worker) artifacts
+cf-trigger/node_modules/
+cf-trigger/.wrangler/
+cf-trigger/.dev.vars*
+cf-trigger/worker-configuration.d.ts

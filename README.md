@@ -146,9 +146,9 @@ Scheduling runs entirely in the cloud — your PC can be off.
 
 ### Cloudflare Worker trigger (recommended)
 
-GitHub Actions `schedule:` cron is unreliable for time-critical jobs — runs are routinely delayed 25–55min and occasionally dropped entirely. A separate Cloudflare Worker fires `repository_dispatch` at 03:00 UTC daily as the primary trigger; the GHA `schedule` cron stays in place as a backup.
+GitHub Actions `schedule:` cron is unreliable for time-critical jobs — runs are routinely delayed 25–55min and occasionally dropped entirely. The [`cf-trigger/`](./cf-trigger) directory contains a tiny Cloudflare Worker that fires `repository_dispatch` at 03:00 UTC daily as the primary trigger; the GHA `schedule` cron stays in place as a backup.
 
-The Worker lives in a separate local project (e.g. `~/Documents/five-iron-trigger/`) and is deployed to Cloudflare via Wrangler. It stores a GitHub fine-grained PAT (scoped to `actions: write` on this repo only) as a Worker secret and POSTs to `https://api.github.com/repos/<owner>/<repo>/dispatches` with `{"event_type": "midnight-booker"}`. Manage with `npx wrangler deploy` / `npx wrangler tail`.
+See [`cf-trigger/README.md`](./cf-trigger/README.md) for setup. TL;DR: create a fine-grained GitHub PAT (scoped to `actions: write` on this repo), set it as a Worker secret via `npx wrangler secret put GITHUB_TOKEN`, then `npx wrangler deploy` from inside `cf-trigger/`.
 
 ### Linting targets.json locally
 
