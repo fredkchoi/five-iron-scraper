@@ -1,7 +1,18 @@
 {
   "targets": [
     {
+      "date": "2026-05-20",
+      "time": "21:00",
+      "duration_hours": 1,
+      "status": "polling"
+    },
+    {
       "date": "2026-06-03",
+      "time": "21:00",
+      "duration_hours": 1
+    },
+    {
+      "date": "2026-06-17",
       "time": "21:00",
       "duration_hours": 1
     }
