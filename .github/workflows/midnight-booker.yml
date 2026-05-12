@@ -2,15 +2,16 @@ name: Midnight Booker
 
 on:
   schedule:
-    # 11:55pm EDT (3:55 UTC) — script gets token (~2min), then books at midnight.
-    # In winter (EST) this fires at 10:55pm ET; the script will sleep ~65min until midnight.
-    - cron: '55 3 * * *'
+    # 11:00pm EDT (3:00 UTC) — generous 60min buffer absorbs GitHub Actions
+    # scheduled-workflow delays (observed up to ~55min); script then sleeps until midnight.
+    # In winter (EST) this fires at 10:00pm ET; the script will sleep ~2hr until midnight.
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 jobs:
   book:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 150
     permissions:
       contents: write
     steps:

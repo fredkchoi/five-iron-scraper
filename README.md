@@ -140,7 +140,7 @@ Scheduling runs entirely in the cloud — your PC can be off.
 | Workflow | Schedule | What it does |
 |---|---|---|
 | `monday-prompt.yml` | Every Monday ~9am ET | Emails a summary of upcoming booking nights for the next 2 weeks with a link to edit `targets.json` |
-| `midnight-booker.yml` | Nightly ~11:55pm ET | Gets fresh session token, books at midnight, emails confirmation with booking details |
+| `midnight-booker.yml` | Nightly ~11:00pm ET | Gets fresh session token, waits until midnight, books, emails confirmation with booking details |
 | `cancellation-poller.yml` | Hourly | On polling targets: checks for cancellations and emails when your exact requested session opens |
 | `validate-targets.yml` | On push/PR to `targets.json` | Lints `targets.json` — blocks merge if dates are invalid, in the past, not during happy hour, or have duplicate entries |
 
