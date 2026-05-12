@@ -142,5 +142,22 @@ Scheduling runs entirely in the cloud — your PC can be off.
 | `monday-prompt.yml` | Every Monday ~9am ET | Emails a summary of upcoming booking nights for the next 2 weeks with a link to edit `targets.json` |
 | `midnight-booker.yml` | Nightly ~11:55pm ET | Gets fresh session token, books at midnight, emails confirmation with booking details |
 | `cancellation-poller.yml` | Hourly | On polling targets: checks for cancellations and emails when your exact requested session opens |
+| `validate-targets.yml` | On push/PR to `targets.json` | Lints `targets.json` — blocks merge if dates are invalid, in the past, not during happy hour, or have duplicate entries |
+
+### Linting targets.json locally
+
+```bash
+python validate_targets.py
+```
+
+Exits 0 (OK) or 1 (errors found). Run this before pushing a `targets.json` edit to catch mistakes early. Checks:
+
+- Valid JSON and schema (`targets` array present)
+- Dates are `YYYY-MM-DD` and in the future
+- `duration_hours` is one of `0.5`, `1`, `1.5`, `2`
+- `time` (if set) is `HH:MM` in 30-minute increments
+- Time is during happy hour for that day of week (Sun–Thu 21:00+, Fri–Sat 22:00+)
+- No duplicate dates
+- No unknown fields
 
 After receiving the Monday email, click the link, edit `targets.json` in the GitHub UI, and commit. The nightly job picks it up automatically.
