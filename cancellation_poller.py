@@ -1,8 +1,10 @@
 """
 Polls for cancellations on dates where the midnight booking failed.
-Runs hourly via GitHub Actions. Sends an email when the exact requested
-session (duration + optional start time) opens up so you can book it
-manually — no auth token required.
+Runs hourly via GitHub Actions. When the exact requested session
+(duration + optional start time) opens up, attempts to book it
+automatically using the same flow as the midnight booker (token
+refresh -> book -> Google Calendar event -> confirmation email).
+Falls back to a manual-action email if the token refresh fails.
 """
 
 import json
@@ -38,9 +40,11 @@ def main():
 
     today = datetime.now(LOCAL_TZ).date()
     still_watching = []
+    token_refreshed = False  # lazy: refresh only once we actually find a slot
 
     from availability import check_availability
-    from book import find_session
+    from book import find_session, refresh_token
+    from scheduler import book_target
 
     for target in polling:
         date_str = target["date"]
@@ -74,19 +78,33 @@ def main():
             still_watching.append(target)
             continue
 
-        session_times = [
-            f"{s['start_time'].strftime('%I:%M %p')}–{s['end_time'].strftime('%I:%M %p')}"
-            for s in matched
-        ]
-        body = (
-            f"A cancellation just opened up for Five Iron on {date_str}!\n\n"
-            f"Your requested {duration_hours}hr session is available:\n"
-            + "\n".join(f"  • {t}" for t in session_times)
-            + f"\n\nBook now (act fast):\n{BOOKING_URL}\n\n"
-            "— Your Five Iron Bot"
-        )
-        print(f"Cancellation found for {label} — notifying.")
-        send_email(subject=f"Cancellation available: Five Iron {date_str}", body=body)
+        print(f"Cancellation found for {label} — attempting to book.")
+
+        if not token_refreshed:
+            print("Refreshing session token via magic link...")
+            token = refresh_token()
+            token_refreshed = True
+            if not token:
+                session_times = [
+                    f"{s['start_time'].strftime('%I:%M %p')}–{s['end_time'].strftime('%I:%M %p')}"
+                    for s in matched
+                ]
+                body = (
+                    f"A cancellation opened up for Five Iron on {date_str}, but the "
+                    f"bot couldn't auto-book it (token refresh failed).\n\n"
+                    f"Your requested {duration_hours}hr session is available:\n"
+                    + "\n".join(f"  • {t}" for t in session_times)
+                    + f"\n\nBook manually:\n{BOOKING_URL}\n\n"
+                    "— Your Five Iron Bot"
+                )
+                send_email(subject=f"Manual action: Five Iron cancellation {date_str}", body=body)
+                still_watching.append(target)
+                continue
+
+        # book_target handles success/failure emails and Google Calendar events
+        success = book_target(target)
+        if not success:
+            still_watching.append(target)
 
     non_polling = [t for t in targets if t.get("status") != "polling"]
     save_targets(non_polling + still_watching)

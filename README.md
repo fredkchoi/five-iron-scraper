@@ -141,7 +141,7 @@ Scheduling runs entirely in the cloud — your PC can be off.
 |---|---|---|
 | `monday-prompt.yml` | Every Monday ~9am ET | Emails a summary of upcoming booking nights for the next 2 weeks with a link to edit `targets.json` |
 | `midnight-booker.yml` | Nightly 11:00pm ET (Cloudflare Worker `repository_dispatch`; GHA `schedule` as backup) | Gets fresh session token, waits until midnight, books, emails confirmation with booking details |
-| `cancellation-poller.yml` | Hourly | On polling targets: checks for cancellations and emails when your exact requested session opens |
+| `cancellation-poller.yml` | Hourly | On polling targets: checks for cancellations and auto-books when your exact requested session opens (manual-action email fallback if token refresh fails) |
 | `validate-targets.yml` | On push/PR to `targets.json` | Lints `targets.json` — blocks merge if dates are invalid, in the past, not during happy hour, or have duplicate entries |
 
 ### Cloudflare Worker trigger (recommended)

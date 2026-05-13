@@ -17,7 +17,7 @@ Python automation for booking Five Iron Golf happy hour simulator slots. Runs en
 | `book.py` | Booking logic: pricing endpoint → book endpoint |
 | `token_refresh.py` | Magic link flow + Gmail IMAP polling for session token |
 | `availability.py` | Fetches available happy hour slots from Five Iron API |
-| `cancellation_poller.py` | Hourly job that watches polling targets for newly-opened cancellations and emails when one appears |
+| `cancellation_poller.py` | Hourly job that watches polling targets; auto-books via `book_target` when a matching slot opens (email fallback if token refresh fails) |
 | `gcal.py` | Google Calendar event creation after successful booking |
 | `setup_gcal.py` | One-time local script to obtain Google OAuth2 refresh token |
 | `monday_prompt.py` | Weekly Monday email summarizing upcoming booking nights |
@@ -56,6 +56,6 @@ Python automation for booking Five Iron Golf happy hour simulator slots. Runs en
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `midnight-booker.yml` | `repository_dispatch` (from CF Worker) + `schedule` (backup) + `workflow_dispatch` | Nightly booking attempt |
-| `cancellation-poller.yml` | `schedule` hourly | Watches polling targets; emails when a cancellation opens |
+| `cancellation-poller.yml` | `schedule` hourly | Watches polling targets; auto-books matching slots (calls into `book_target` from scheduler) with manual-action email fallback if token refresh fails |
 | `monday-prompt.yml` | `schedule` Monday 9am ET | Weekly email reminder to confirm targets |
 | `validate-targets.yml` | Push/PR touching `targets.json` | Lints schema + happy-hour rules; blocks merge on failure |
