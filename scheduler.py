@@ -78,18 +78,28 @@ def validate_targets(targets: list) -> list:
 
 
 def get_tonight_targets(targets: list) -> list:
-    """Return all targets whose bookings open tonight at midnight (exactly 15 days out)."""
+    """Return all targets whose bookings open tonight at midnight (exactly 15 days out).
+
+    Polling targets are excluded — those are owned by the cancellation poller.
+    """
     today = datetime.now(LOCAL_TZ).date()
     booking_open_date = (today + timedelta(days=DAYS_IN_ADVANCE)).isoformat()
-    return [t for t in targets if t.get("date") == booking_open_date]
+    return [
+        t for t in targets
+        if t.get("date") == booking_open_date and t.get("status") != "polling"
+    ]
 
 
 def get_already_open_targets(targets: list) -> list:
-    """Return targets whose booking window is already open (1–14 days out)."""
+    """Return targets whose booking window is already open (1–14 days out).
+
+    Polling targets are excluded — those are owned by the cancellation poller.
+    """
     today = datetime.now(LOCAL_TZ).date()
     return [
         t for t in targets
         if today.isoformat() < t.get("date", "") <= (today + timedelta(days=DAYS_IN_ADVANCE - 1)).isoformat()
+        and t.get("status") != "polling"
     ]
 
 
