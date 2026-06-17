@@ -1,0 +1,38 @@
+name: Backfill Calendar Event
+
+# One-off manual workflow to retroactively create a Google Calendar event for
+# a confirmed Five Iron booking whose original gcal call failed. Delete this
+# file (and backfill_gcal.py) once backfill is complete.
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Booking date (YYYY-MM-DD)'
+        required: true
+      start_time:
+        description: 'Start time, 24hr (HH:MM)'
+        required: true
+        default: '21:00'
+      duration_hours:
+        description: 'Duration in hours (e.g. 1, 1.5, 2)'
+        required: true
+        default: '1'
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Backfill calendar event
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+          GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
+          GOOGLE_EVENT_COLOR: ${{ secrets.GOOGLE_EVENT_COLOR }}
+        run: python backfill_gcal.py "${{ github.event.inputs.date }}" "${{ github.event.inputs.start_time }}" "${{ github.event.inputs.duration_hours }}"

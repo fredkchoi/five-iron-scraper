@@ -55,8 +55,11 @@ After each successful booking the bot can automatically create a calendar event.
 2. **APIs & Services → Credentials → Create Credentials → OAuth client ID** — choose **Desktop app**
 3. Add the client ID and secret to `.env`
 4. Add yourself as a test user: **OAuth consent screen → Test users → Add users**
-5. Run `python setup_gcal.py` — it opens a browser, you approve, it prints your `GOOGLE_REFRESH_TOKEN`
-6. Find your calendar ID: Google Calendar → gear → Settings → click your calendar → **Integrate calendar → Calendar ID**
+5. **Publish your OAuth app** (important, see caveat below): **APIs & Services → OAuth consent screen → Audience → Publish app**. No verification is required for personal use with the calendar scope.
+6. Run `python setup_gcal.py` — it opens a browser, you approve, it prints your `GOOGLE_REFRESH_TOKEN`
+7. Find your calendar ID: Google Calendar → gear → Settings → click your calendar → **Integrate calendar → Calendar ID**
+
+> **Caveat: refresh tokens expire after 7 days in "Testing" mode.** If you skip step 5 and leave the OAuth app in Testing status, Google silently invalidates your refresh token every 7 days, and `gcal.py` will fail with `400 Bad Request` at the token endpoint on the next booking. Publishing the app to "In production" removes this limit (tokens then only expire if unused for 6 months, manually revoked, or after a password change). If your existing token has already expired, re-run `setup_gcal.py` after publishing to mint a fresh one and update the GitHub `GOOGLE_REFRESH_TOKEN` secret.
 
 | Variable | Description |
 |---|---|
