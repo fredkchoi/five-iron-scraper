@@ -1,3 +1,19 @@
 {
-  "targets": []
+  "targets": [
+    {
+      "date": "2026-07-15",
+      "time": "21:00",
+      "duration_hours": 1
+    },
+    {
+      "date": "2026-07-22",
+      "time": "21:00",
+      "duration_hours": 1
+    },
+    {
+      "date": "2026-07-28",
+      "time": "21:00",
+      "duration_hours": 1
+    }
+  ]
 }
