@@ -3,12 +3,14 @@
     {
       "date": "2026-10-07",
       "time": "21:00",
-      "duration_hours": 1
+      "duration_hours": 1,
+      "status": "polling"
     },
     {
       "date": "2026-10-14",
       "time": "21:00",
-      "duration_hours": 1
+      "duration_hours": 1,
+      "status": "polling"
     },
     {
       "date": "2026-10-21",
