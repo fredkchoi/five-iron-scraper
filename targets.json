@@ -14,12 +14,6 @@
       "date": "2026-11-11",
       "time": "21:00",
       "duration_hours": 1
-    },
-    {
-      "date": "2026-10-07",
-      "time": "21:00",
-      "duration_hours": 1,
-      "status": "polling"
     }
   ]
 }
